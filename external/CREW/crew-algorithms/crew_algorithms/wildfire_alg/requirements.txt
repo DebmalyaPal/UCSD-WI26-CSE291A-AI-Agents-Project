@@ -1,0 +1,5 @@
+pip install pydantic
+pip install --upgrade openai==1.82.0
+pip install certifi
+pip install opencv-python
+pip install seaborn
