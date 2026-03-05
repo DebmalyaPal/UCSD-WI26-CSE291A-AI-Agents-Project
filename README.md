@@ -105,7 +105,7 @@ CREW uses Nakama for networking.
 
 From project root:  
 ```bash
-cd external/CREW/crew-dojo
+cd external/CREW/crew-dojo/Nakama
 docker compose up -d
 ```
 
@@ -125,7 +125,7 @@ conda activate crew
 
 cd external/CREW/crew-algorithms/crew_algorithms/wildfire_alg
 
-pip install -r requirements.txt
+bash requirements.txt
 # OR if poetry is used:
 poetry install
 ```
@@ -179,11 +179,7 @@ venv\Scripts\activate
 ```bash
 cd external/CREW/crew-algorithms/crew_algorithms/wildfire_alg
 pip install --upgrade pip
-pip install -r requirements.txt
-
-# OR if poetry is used in repo
-pip install poetry
-poetry install
+bash requirements.txt
 ```
 
 5) Set API key
@@ -216,7 +212,7 @@ SECTION 6 — BUILD AND RUN UNITY SIMULATION
 ------------------------------------------------------------
 
 1) Open Unity Hub
-2) Add project: `external/CREW/crew-simulation`
+2) Add project: `external/CREW/crew-dojo/Unity`
 3) Open project
 4) Press Play to test
    OR

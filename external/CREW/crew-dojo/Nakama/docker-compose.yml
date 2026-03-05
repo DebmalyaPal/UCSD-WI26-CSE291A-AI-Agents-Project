@@ -1,58 +1,48 @@
-version: '3'
 services:
   postgres:
-    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
+    image: postgres:15-alpine
+    platform: linux/arm64/v8           # native ARM64 for M1/M2
     environment:
-      - POSTGRES_DB=nakama
-      - POSTGRES_PASSWORD=localdb
-    image: postgres:12.2-alpine
+      POSTGRES_DB: nakama
+      POSTGRES_PASSWORD: localdb
     ports:
       - "5432:5432"
-      - "8080:8080"
     volumes:
-      - data:/var/lib/postgresql/data
+      - nakama_data:/var/lib/postgresql/data
     networks:
-      dojo-network:
-        ipv4_address: 172.23.0.49
+      - dojo-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   nakama:
-    build: .
+    image: heroiclabs/nakama:3.15.0
+    platform: linux/amd64              # Nakama only available as amd64, runs under emulation
+    volumes:
+      - ./local.yml:/nakama/data/local.yml
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     entrypoint:
       - "/bin/sh"
       - "-ecx"
       - >
-        /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama && exec /nakama/nakama --config /nakama/data/local.yml --database.address postgres:localdb@postgres:5432/nakama        
-    expose:
-      - "7349"
-      - "7350"
-      - "7351"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:7350/" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    links:
-      - "postgres:db"
+        /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama &&
+        exec /nakama/nakama --config /nakama/data/local.yml --database.address postgres:localdb@postgres:5432/nakama
     ports:
       - "7349:7349"
       - "7350:7350"
       - "7351:7351"
-    extra_hosts:
-      - "host.docker.internal:172.23.0.100"
     networks:
-      dojo-network:
-        ipv4_address: 172.23.0.50
+      - dojo-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
-  data:
+  nakama_data:
 
 networks:
   dojo-network:
-    name: dojo-network
-    ipam:
-      driver: default
-      config:
-        - subnet: 172.23.0.0/24
-          gateway: 172.23.0.1
+    driver: bridge
