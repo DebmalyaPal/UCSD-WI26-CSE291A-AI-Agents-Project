@@ -1,1 +1,8 @@
+**/__pycache__
+**/__ipynb_checkpoints__
+**/.vscode
+**/.DS_Store
+
 **/venv
+
+**/crew-dojo/Unity

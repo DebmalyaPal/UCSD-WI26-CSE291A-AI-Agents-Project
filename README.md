@@ -116,50 +116,28 @@ If successful, Nakama server is active.
 ------------------------------------------------------------
 SECTION 5 — SETUP PYTHON AGENT ENVIRONMENT
 ------------------------------------------------------------
-
-**Option A — Using Conda (Recommended)**
-
-```bash
-conda create -n crew python=3.10
-conda activate crew
-
-cd external/CREW/crew-algorithms/crew_algorithms/wildfire_alg
-
-bash requirements.txt
-# OR if poetry is used:
-poetry install
-```
-
-Set your LLM API key:  
-
-```bash
-export OPENAI_API_KEY=your_key_here      (macOS/Linux)
-setx OPENAI_API_KEY your_key_here        (Windows)
-```
   
-------------------------------------------------------------
-  
-**Option B — Using Python venv (Lightweight)**
+**Option A — Using Python venv (Lightweight)**
 
 1) Ensure Python 3.10 is installed
 
 Mac:
 ```bash
-brew install python@3.10
+brew install python@3.11
 ```
 
 Linux:
 ```bash
-sudo apt install python3.10 python3.10-venv
+sudo apt install python3.11 python3.11-venv
 ```
 
 Windows:  
-Install Python 3.10 from python.org
+Install Python 3.11 from python.org
 
 2) Create virtual environment
 
 ```bash
-python3.10 -m venv venv
+python3.11 -m venv venv
 ```
 
 3) Activate environment
@@ -179,7 +157,7 @@ venv\Scripts\activate
 ```bash
 cd external/CREW/crew-algorithms/crew_algorithms/wildfire_alg
 pip install --upgrade pip
-bash requirements.txt
+pip install -r req.txt
 ```
 
 5) Set API key
@@ -196,19 +174,14 @@ setx OPENAI_API_KEY your_key_here
 
 ------------------------------------------------------------
 
-**Option C — Docker-Only Agents (Most Reproducible for Teams)**
+**Option B — Docker-Only Agents (Most Reproducible Approach)**
 
 Skip local Python entirely and run agents inside Docker.
-
-Example:
-```bash
-cd external/CREW/crew-algorithms/crew_algorithms/wildfire_alg
-docker build -t crew-agents .
-docker run --env OPENAI_API_KEY=your_key_here crew-agents
-```
+  
+(NOTE: `requirements.txt` is a bash script and is incomplete, so we have added a separate compatible `req.txt` file.). 
 
 ------------------------------------------------------------
-SECTION 6 — BUILD AND RUN UNITY SIMULATION
+SECTION 6 — BUILD AND RUN UNITY SIMULATION (**NEEDS TESTING, MIGHT BE INCOMPLETE**)
 ------------------------------------------------------------
 
 1) Open Unity Hub
@@ -233,19 +206,28 @@ The simulation will connect to Nakama automatically.
 SECTION 7 — RUN AGENTS
 ------------------------------------------------------------
 
-From `wildfire_alg/algorithms/` directory:
+From `external/CREW/crew-algorithms/` directory:
 
 ```bash
-python algorithms/<algorithm>/__main__.py
+# Using Python venv locally
+python -m crew_algorithms/wildfire_alg/algorithms/<algorithm>/__main__.py
 
-# OR
+# ---- OR ----
 
+# Using Docker
 docker build -t crew-agents .
-docker run --env OPENAI_API_KEY=your_key_here crew-agents \
-    python algorithms/<algorithm>/__main__.py \
-    envs.level=<from-build-config-preset> \
-    envs.seed=483 envs.max_steps=20
 
+docker run --rm --env OPENAI_API_KEY=your-key-here --env PYTHONPATH=/app crew-agents python crew_algorithms/wildfire_alg/algorithms/<algorithm_name>/__main__.py envs.level=<preset_name> envs.seed=483 envs.max_steps=20
+
+# Example:
+docker run --rm \
+  --env OPENAI_API_KEY=your-key-here \
+  --env PYTHONPATH=/app \
+  crew-agents \
+  python crew_algorithms/wildfire_alg/algorithms/CAMON/__main__.py \
+  envs.level=Cut_Trees_Sparse_small \
+  envs.seed=483 \
+  envs.max_steps=20
 ```
 
 Available algorithms:
