@@ -47,7 +47,7 @@ def translate_action(option_str: str, type: int, global_data: dict) -> Action:
     else:
         type_string = 'helicopter'
     # Load prompt
-    prompt_path = f'algorithms/COELA/prompts/translator/{type_string}_translator.txt'
+    prompt_path = f'crew_algorithms/wildfire_alg/algorithms/COELA/prompts/translator/{type_string}_translator.txt'
     with open(prompt_path, 'r', encoding='utf-8') as f:
         prompt = f.read().replace("ACTION", option_str)
     # Call OpenAI
@@ -228,7 +228,7 @@ def generate_action(agent: Agent, global_data: dict, proposed_message: str) -> s
     if agent.type==0 and agent.extra_variables[2]==1:
         abilities_string = "            - Do nothing since you are in a helicopter."
     else:
-        with open(f'algorithms/COELA/prompts/descriptions/{type_string.lower()}_description.txt', 'r', encoding='utf-8') as f:
+        with open(f'crew_algorithms/wildfire_alg/algorithms/COELA/prompts/descriptions/{type_string.lower()}_description.txt', 'r', encoding='utf-8') as f:
             abilities_string = f.read()
 
     generate_action_string = f"""

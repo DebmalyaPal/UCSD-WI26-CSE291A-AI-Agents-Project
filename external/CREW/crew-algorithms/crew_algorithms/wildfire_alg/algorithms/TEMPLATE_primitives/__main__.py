@@ -66,7 +66,7 @@ def wildfire_alg(cfg: Config):
     #     ),
     # )
     #logger.log_hparams(cfg)
-    device = "cpu" if not torch.has_cuda else "cuda:0"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
     toggle_timestep_channel = ToggleTimestepChannel(uuid.uuid4())
 
     cfg.envs.algorithm = 'TEMPLATE_primitives'

@@ -64,7 +64,7 @@ def wildfire_alg(cfg: Config):
     #     ),
     # )
     #logger.log_hparams(cfg)
-    device = "cpu" if not torch.has_cuda else "cuda:0"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
     toggle_timestep_channel = ToggleTimestepChannel(uuid.uuid4())
 
 
@@ -91,7 +91,8 @@ def wildfire_alg(cfg: Config):
     os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
     os.environ["SSL_CERT_FILE"] = certifi.where()
     api_key = os.environ['OPENAI_API_KEY']
-    path = os.path.join("results\logs\CAMON", level, str(seed), cfg.envs.timestamp)
+    logs_root = os.path.join(str(cfg.envs.render_folder_path), "wildfire_alg")
+    path = os.path.join(logs_root, "results", "logs", "CAMON", level, str(seed), cfg.envs.timestamp)
     os.makedirs(path, exist_ok=True)
 
     

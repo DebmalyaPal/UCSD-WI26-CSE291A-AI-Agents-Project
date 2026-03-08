@@ -54,7 +54,7 @@ def autoencoder(cfg: Config):
         train,
     )
 
-    device = "cpu" if not torch.has_cuda else "cuda:0"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
     train_dataloader, val_dataloader = make_dataloaders(cfg)
     net = make_model(cfg.envs.num_channels, cfg.embed_dim)
     criterion = nn.MSELoss()

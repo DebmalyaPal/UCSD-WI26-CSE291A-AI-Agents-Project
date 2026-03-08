@@ -6,11 +6,11 @@ import numpy as np
 import torch
 from tensordict.tensordict import TensorDict, TensorDictBase
 from torchrl.data.tensor_specs import (
-    BoundedTensorSpec,
-    CompositeSpec,
-    DiscreteTensorSpec,
-    MultiDiscreteTensorSpec,
-    UnboundedContinuousTensorSpec,
+    Bounded as BoundedTensorSpec,
+    Composite as CompositeSpec,
+    Categorical as DiscreteTensorSpec,
+    MultiCategorical as MultiDiscreteTensorSpec,
+    UnboundedContinuous as UnboundedContinuousTensorSpec,
 )
 from torchrl.data.utils import numpy_to_torch_dtype_dict
 from torchrl.envs.common import _EnvWrapper
@@ -231,13 +231,14 @@ class UnityWrapper(_EnvWrapper):
         )
 
     def read_reward(self, agent_id, reward):
-        return self.reward_spec[agent_id].encode(reward)
+        return self.reward_spec["agents", "reward"][agent_id].encode(reward)
 
     def read_valid_mask(self, agent_id, valid):
         return self.valid_mask_spec["agents", "valid_mask"][agent_id].encode(valid)
 
     def read_action(self, action):
-        action = self.action_spec.to_numpy(action, safe=False)
+        leaf_spec = self.action_spec["agents", "action"]
+        action = leaf_spec.to_numpy(action, safe=False)
         # Actions are defined to be 2D arrays with the first dimension
         # used for the number of agents in the game and the second
         # dimension used for the action.
@@ -248,9 +249,9 @@ class UnityWrapper(_EnvWrapper):
         else:
             action = np.reshape(action, (1, np.prod(action.shape)))
 
-        if isinstance(self.action_spec, CompositeSpec):
+        if isinstance(leaf_spec, CompositeSpec):
             action = ActionTuple(action["continuous"], action["discrete"])
-        elif isinstance(self.action_spec, DiscreteTensorSpec | MultiDiscreteTensorSpec):
+        elif isinstance(leaf_spec, DiscreteTensorSpec | MultiDiscreteTensorSpec):
             action = ActionTuple(None, action)
         else:
             action = ActionTuple(action, None)

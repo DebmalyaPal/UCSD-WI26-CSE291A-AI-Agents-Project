@@ -58,7 +58,7 @@ def eval(cfg: Config):
     from crew_algorithms.utils.common_utils import SortedItem
     from crew_algorithms.utils.rl_utils import log_policy, make_collector
 
-    device = "cpu" if not torch.has_cuda else "cuda:0"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
     toggle_timestep_channel = ToggleTimestepChannel(uuid.uuid4())
 
     env_fn = lambda: make_env(cfg.envs, toggle_timestep_channel, False, device)

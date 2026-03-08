@@ -136,9 +136,12 @@ class Agent:
             f"Create a detailed text summary of all relevant information, such as location, surroundings, presence of fire and civilians, etc. Speak only in first person as AGENT_{self.id}. "
         )
 
-        client = OpenAI(api_key=self.api_key)
+        client = OpenAI(
+            base_url="https://tritonai-api.ucsd.edu",
+            api_key=self.api_key
+        )
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="api-gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message}

@@ -48,13 +48,16 @@ def translate_action(option_str: str, type: int, global_data: dict) -> Action:
     else:
         type_string = 'helicopter'
     # Load prompt
-    prompt_path = f'algorithms/CAMON/prompts/translator/{type_string}_translator.txt'
+    prompt_path = f'crew_algorithms/wildfire_alg/algorithms/CAMON/prompts/translator/{type_string}_translator.txt'
     with open(prompt_path, 'r', encoding='utf-8') as f:
         prompt = f.read().replace("ACTION", option_str)
     # Call OpenAI
-    client = OpenAI(api_key=global_data['leader_agent'].api_key)
+    client = OpenAI(
+        base_url="https://tritonai-api.ucsd.edu",
+        api_key=global_data['leader_agent'].api_key
+    )
     response = client.chat.completions.create(
-        model='gpt-4o',
+        model='api-gpt-oss-120b',
         messages=[
             {'role':'system', 'content':system_message},
             {'role':'user', 'content':prompt}
@@ -130,7 +133,7 @@ def generate_plan(agent: Agent, global_data: dict) -> None:
 
         if global_data.get(kind+'s'):
 
-            path = f'algorithms/CAMON/prompts/descriptions/{kind}_description.txt'
+            path = f'crew_algorithms/wildfire_alg/algorithms/CAMON/prompts/descriptions/{kind}_description.txt'
             with open(path, 'r', encoding='utf-8') as f:
                 team_abilities += f.read()
 
@@ -188,13 +191,16 @@ def generate_plan(agent: Agent, global_data: dict) -> None:
             <AGENT_A-message>'action'</AGENT_A-message>
             """
     # Call OpenAI
-    client = OpenAI(api_key=agent.api_key)
+    client = OpenAI(
+        base_url="https://tritonai-api.ucsd.edu",
+        api_key=agent.api_key
+    )
     system_message = f"""
                     You are AGENT_{agent.id}, currently acting as the leader in a cooperative multi-agent robotic task. Your team is in a  {agent.cfg.envs.map_size} by {agent.cfg.envs.map_size} forest grid world that spans x:[0 to {agent.cfg.envs.map_size}] and y:[0 to {agent.cfg.envs.map_size}].
                     You have access to the collective observations and the progress of all agents. Your job is to plan the next best action for yourself, and OPTIONALLY: the next best action for any other agents."""
     user_message = generate_plan_string
     response = client.chat.completions.create(
-        model='gpt-4o',
+        model='api-gpt-oss-120b',
         messages=[{'role':'system','content':system_message},{'role':'user','content':user_message}],
         temperature=0.7
     )
@@ -269,7 +275,7 @@ def propose_plan(agent: Agent, global_data: dict) -> None:
     chat_string = ''.join(f"{time}: \n{msg}\n\n" for time, msg in agent.chat_history.items())
 
     # Description prompt
-    desc_path = f'algorithms/CAMON/prompts/descriptions/{type_string.lower()}_description.txt'
+    desc_path = f'crew_algorithms/wildfire_alg/algorithms/CAMON/prompts/descriptions/{type_string.lower()}_description.txt'
     with open(desc_path, 'r', encoding='utf-8') as f:
         description_string = f.read()
 
@@ -310,13 +316,16 @@ def propose_plan(agent: Agent, global_data: dict) -> None:
                     <action>'MY NEXT ACTION'</action>
 
                     """
-    client = OpenAI(api_key=agent.api_key)
+    client = OpenAI(
+        base_url="https://tritonai-api.ucsd.edu",
+        api_key=agent.api_key
+    )
     system_msg = f"""
                     You are AGENT_{agent.id}, an embodied {type_string} agent.
                     You propose your next action based on your task, observations, past actions, and chat history.
                     """
     response = client.chat.completions.create(
-        model='gpt-4o',
+        model='api-gpt-oss-120b',
         messages=[{'role':'system','content':system_msg},{'role':'user','content':proposal_str}],
         temperature=0.7
     )
@@ -345,7 +354,7 @@ def propose_plan(agent: Agent, global_data: dict) -> None:
 
         if global_data.get(kind+'s'):
 
-            path = f'algorithms/CAMON/prompts/descriptions/{kind}_description.txt'
+            path = f'crew_algorithms/wildfire_alg/algorithms/CAMON/prompts/descriptions/{kind}_description.txt'
             with open(path, 'r', encoding='utf-8') as f:
                 team_abilities += f.read()
 
@@ -413,8 +422,11 @@ def propose_plan(agent: Agent, global_data: dict) -> None:
                     You are AGENT_{agent.id}, currently acting as the leader in a cooperative multi-agent robotic task. Your team is in a  {agent.cfg.envs.map_size} by {agent.cfg.envs.map_size} forest grid world that spans x:[0 to {agent.cfg.envs.map_size}] and y:[0 to {agent.cfg.envs.map_size}].
                     You have access to the collective observations and the progress of all agents. Your job is to review the proposed actions of your teammates and assign them actions.
                     """
-    rev_resp = OpenAI(api_key=leader.api_key).chat.completions.create(
-        model='gpt-4o',
+    rev_resp = OpenAI(
+        base_url="https://tritonai-api.ucsd.edu",
+        api_key=leader.api_key
+    ).chat.completions.create(
+        model='api-gpt-oss-120b',
         messages=[{'role':'system','content':system_msg},{'role':'user','content':review_prompt}],
         temperature=0.7
     )

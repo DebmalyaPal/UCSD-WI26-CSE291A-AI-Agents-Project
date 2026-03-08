@@ -48,7 +48,7 @@ def translate_action(option_str: str, type: int, global_data: dict) -> Action:
     else:
         type_string = 'helicopter'
     # Load prompt
-    prompt_path = f'algorithms/TEMPLATE_primitives/prompts/translator/{type_string}_translator.txt'
+    prompt_path = f'crew_algorithms/wildfire_alg/algorithms/TEMPLATE_primitives/prompts/translator/{type_string}_translator.txt'
     with open(prompt_path, 'r', encoding='utf-8') as f:
         prompt = f.read().replace("ACTION", option_str)
     # Call OpenAI

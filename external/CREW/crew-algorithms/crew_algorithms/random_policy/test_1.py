@@ -21,7 +21,7 @@ def find_free_port():
 
 def random_policy():
     """An implementation of a random policy."""
-    device = "cpu" if not torch.has_cuda else "cuda:0"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
 
     env = UnityEnv(
         "/Users/hyerra/Desktop/3DBalanceBall.app",
