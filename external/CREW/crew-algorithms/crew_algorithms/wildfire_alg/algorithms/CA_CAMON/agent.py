@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from crew_algorithms.wildfire_alg.algorithms.CAMON.__main__ import Config
+from crew_algorithms.wildfire_alg.algorithms.CA_CAMON.__main__ import Config
 from typing import List, Tuple, Dict
 
 

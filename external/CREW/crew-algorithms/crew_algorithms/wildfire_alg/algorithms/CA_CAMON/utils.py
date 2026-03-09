@@ -1,7 +1,7 @@
 import re
 from openai import OpenAI
 from pydantic import BaseModel
-from crew_algorithms.wildfire_alg.algorithms.CAMON.agent import Agent
+from crew_algorithms.wildfire_alg.algorithms.CA_CAMON.agent import Agent
 
 # ============================================================
 # [CA-CAMON]  Capability constants

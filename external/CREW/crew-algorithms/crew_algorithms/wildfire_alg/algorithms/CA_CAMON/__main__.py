@@ -45,8 +45,8 @@ def wildfire_alg(cfg: Config):
     import torch
     from crew_algorithms.envs.channels import ToggleTimestepChannel
     from crew_algorithms.wildfire_alg.core.utils import make_env
-    from crew_algorithms.wildfire_alg.algorithms.CAMON.agent import Agent
-    from crew_algorithms.wildfire_alg.algorithms.CAMON.utils import (
+    from crew_algorithms.wildfire_alg.algorithms.CA_CAMON.agent import Agent
+    from crew_algorithms.wildfire_alg.algorithms.CA_CAMON.utils import (
         generate_plan,
         propose_plan,
         Action,
