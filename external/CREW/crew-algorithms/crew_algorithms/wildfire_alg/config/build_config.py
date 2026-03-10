@@ -6,7 +6,7 @@ def create_level_presets():
     # Cut Trees: Sparse
     presets['Cut_Trees_Sparse_small'] = {
         'game_type': 0, 'map_size': 30, 'lines': False, 'tree_count': 6, 'trees_per_line': 1,
-        'starting_firefighter_agents': 5, 'known': True,
+        'starting_firefighter_agents': 10, 'known': True,
     }
     presets['Cut_Trees_Sparse_large'] = {
         'game_type': 0, 'map_size': 60, 'lines': False, 'tree_count': 25, 'trees_per_line': 1,
@@ -88,13 +88,6 @@ def create_level_presets():
         'game_type': 4, 'map_size': 150, 'civilian_count': 5, 'civilian_clusters': 2, 'civilian_move_frequency': 300, 'known': False,
         'starting_firefighter_agents': 10, 'starting_drone_agents': 2, 'starting_helicopter_agents': 2
     }
-
-    # Half Game - Test CA-CAMON
-    presets['Half_Game'] = {
-        'game_type': 5, 'map_size': 100, 'fire_spread_frequency': 250,
-        'civilian_count': 5, 'civilian_clusters': 1, 'civilian_move_frequency': 300,
-        'starting_firefighter_agents': 50, 'starting_bulldozer_agents': 50, 'starting_drone_agents': 25, 'starting_helicopter_agents': 25, 'vegetation_density_offset': 30, 'known': False,
-    }
     
     # Full Game
     presets['Full_Game'] = {
@@ -102,6 +95,25 @@ def create_level_presets():
         'civilian_count': 5, 'civilian_clusters': 1, 'civilian_move_frequency': 300,
         'starting_firefighter_agents': 10, 'starting_bulldozer_agents': 1, 'starting_drone_agents': 2, 'starting_helicopter_agents': 2, 'vegetation_density_offset': 30, 'known': False,
     }
+
+    presets['CA_CAMON_Test'] = {
+        'game_type': 3,                     # Suppress Fire
+        'map_size': 100,
+        'water': False,
+        'fire_spread_frequency': 300,       # faster spread = more urgent to find it
+        'known': False,                     # unknown location = scanning required
+        'vegetation_density_offset': 30,
+        'starting_firefighter_agents': 4,   # workers
+        'starting_drone_agents': 2,         # regional leaders (2 regions each after merge)
+        'starting_helicopter_agents': 2,    # regional leaders
+    }
+    # 4 eligible leaders on 100×100 grid = 25 regions → merged to 4 super-regions (25×25 each)
+    # Each helicopter/drone anchors to one quadrant
+    # Firefighters rove as workers within each quadrant
+    # CAMON: all 4 aerial agents will cluster on first detected fire,
+    #        leaving 3 quadrants blind
+    # CA-CAMON: each aerial agent holds its quadrant,
+    #           firefighters handle suppression within the region
 
     return presets
 

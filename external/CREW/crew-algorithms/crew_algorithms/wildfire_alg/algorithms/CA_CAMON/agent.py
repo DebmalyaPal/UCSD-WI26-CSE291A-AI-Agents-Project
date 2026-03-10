@@ -32,6 +32,18 @@ class Agent:
         # None when this agent is not currently acting as any region's leader.
         self.assigned_region: dict | None = None
 
+        # [CA-CAMON] Home region — set ONCE at initialisation after the first
+        # assign_regional_leaders() call and NEVER changed afterwards.
+        # This is the region the agent is permanently responsible for.
+        # None for workers (firefighters, bulldozers).
+        self.home_region: dict | None = None
+
+        # [CA-CAMON] Anchor flag — True means this agent is a regional leader
+        # that must stay within its home_region boundaries.
+        # Cleared temporarily only when the agent is the SOLE eligible leader
+        # covering a merged super-region (agents < regions scenario).
+        self.is_anchored: bool = False
+
         # [CA-CAMON] Global leader flag.
         # True for exactly one agent at any point in time.
         # Set/cleared by __main__.py when the global leader is elected or dies.

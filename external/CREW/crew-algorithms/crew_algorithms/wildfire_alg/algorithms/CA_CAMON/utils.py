@@ -137,13 +137,29 @@ def assign_regional_leaders(regions: list, agents: list) -> None:
     so dead agents are already absent from `agents`.
 
     Priority inside each region:
-        1. Helicopter with the highest score.
-        2. Drone with the highest score.
+        1. Anchored home-region agent (helicopter/drone) — always preferred.
+           An anchored agent is one whose home_region IS this region; they
+           are the "permanent owner" regardless of exact current position.
+        2. Any helicopter/drone physically present with highest score.
         3. Reluctant leader: any worker — only when no eligible agent present.
         4. No agents → region["leader"] = None  (dormant).
+
+    NOTE: an anchored leader whose home_region is this region is included
+    even when _agent_in_region() is False (i.e. it temporarily wandered out).
+    This prevents leadership vacuums caused by brief boundary crossings while
+    chasing fire.  The agent will receive an anchor-correction message from
+    orchestrate_global() instructing it to return.
     """
     for region in regions:
-        candidates = [a for a in agents if _agent_in_region(region, a)]
+        # Physical candidates currently inside the region
+        physical = [a for a in agents if _agent_in_region(region, a)]
+        # Home-region owners (may or may not be physically inside right now)
+        home_owners = [a for a in agents if a.home_region is region and can_be_leader(a)]
+
+        # Build the candidate pool: home owners take priority over physical visitors
+        candidate_set = {a for a in physical}
+        candidate_set.update(home_owners)
+        candidates = list(candidate_set)
 
         if not candidates:
             region["leader"]           = None
@@ -151,18 +167,43 @@ def assign_regional_leaders(regions: list, agents: list) -> None:
             continue
 
         chosen = None
+
+        # Tier 1: prefer home-region owners (already anchored / should be anchored)
         for preferred in ("helicopter", "drone"):
-            typed = [c for c in candidates if get_agent_type_name(c) == preferred]
+            typed = [c for c in home_owners if get_agent_type_name(c) == preferred]
             if typed:
                 chosen = max(typed, key=leadership_score)
                 break
 
+        # Tier 2: any eligible agent physically present
+        if chosen is None:
+            for preferred in ("helicopter", "drone"):
+                typed = [c for c in physical if get_agent_type_name(c) == preferred]
+                if typed:
+                    chosen = max(typed, key=leadership_score)
+                    break
+
         if chosen is not None:
             region["leader"]           = chosen
             region["reluctant_leader"] = False
+            # Establish home_region if not yet set and anchor the leader
+            if chosen.home_region is None:
+                chosen.home_region = region
+            if chosen.home_region is region:
+                chosen.is_anchored = True
         else:
-            region["leader"]           = max(candidates, key=lambda a: a.id)
+            # Reluctant leader: best available worker physically in region
+            physical_workers = [a for a in physical if not can_be_leader(a)]
+            if physical_workers:
+                region["leader"]           = max(physical_workers, key=lambda a: a.id)
+            elif physical:
+                region["leader"]           = max(physical, key=lambda a: a.id)
+            else:
+                region["leader"]           = None
+                region["reluctant_leader"] = False
+                continue
             region["reluctant_leader"] = True
+            region["leader"].is_anchored = False   # workers are never anchored
             print(
                 f"[CA-CAMON] Region {region['id']}: no eligible leader. "
                 f"AGENT_{region['leader'].id} ({get_agent_type_name(region['leader'])}) "
@@ -174,22 +215,37 @@ def check_and_reassign_regional_leader(region: dict, agents: list) -> None:
     """
     [CA-CAMON] Called each timestep after assign_regional_leaders.
 
-    Case A: current leader has walked out of the region → reassign.
-    Case B: a reluctant-leader region now has an eligible agent → upgrade.
+    Case A: current leader is a reluctant worker but an eligible (home) agent
+            has now arrived → upgrade immediately.
+    Case B: current leader wandered OUTSIDE its home_region AND is anchored →
+            keep it as leader (assign_regional_leaders already does this) but
+            flag it so orchestrate_global can issue a return directive.
+    Case C: current leader walked out and has no home_region tie to this region
+            (visitor promoted) → reassign from physical candidates.
+    Case D: region has no leader but an anchored home-owner just returned →
+            restore it.
     """
     current = region.get("leader")
 
-    # Case A: leader left the region
-    if current is not None and not _agent_in_region(region, current):
-        print(
-            f"[CA-CAMON] Region {region['id']}: "
-            f"AGENT_{current.id} left the region. Reassigning."
-        )
-        assign_regional_leaders([region], agents)
+    # Case D: dormant region — check if an anchored home owner is back
+    if current is None:
+        home_owners = [
+            a for a in agents
+            if a.home_region is region and can_be_leader(a) and _agent_in_region(region, a)
+        ]
+        if home_owners:
+            new_leader = max(home_owners, key=leadership_score)
+            region["leader"]           = new_leader
+            region["reluctant_leader"] = False
+            new_leader.is_anchored     = True
+            print(
+                f"[CA-CAMON] Region {region['id']}: home owner "
+                f"AGENT_{new_leader.id} returned. Leadership restored."
+            )
         return
 
-    # Case B: reluctant leader can be upgraded to an eligible agent
-    if region.get("reluctant_leader") and current is not None:
+    # Case A: reluctant leader upgrade
+    if region.get("reluctant_leader"):
         for preferred in ("helicopter", "drone"):
             eligible = [
                 a for a in agents
@@ -204,7 +260,29 @@ def check_and_reassign_regional_leader(region: dict, agents: list) -> None:
                 )
                 region["leader"]           = new_leader
                 region["reluctant_leader"] = False
+                if new_leader.home_region is None:
+                    new_leader.home_region = region
+                new_leader.is_anchored     = True
                 return
+
+    # Case B / C: leader is outside the region
+    if not _agent_in_region(region, current):
+        if current.home_region is region and current.is_anchored:
+            # Case B: anchored home leader temporarily outside — keep assignment,
+            # orchestrate_global will issue a return directive.
+            print(
+                f"[CA-CAMON] Region {region['id']}: anchored leader "
+                f"AGENT_{current.id} is outside region. Keeping assignment; "
+                f"return directive will be issued."
+            )
+            return
+        else:
+            # Case C: visitor walked out — reassign from physical candidates
+            print(
+                f"[CA-CAMON] Region {region['id']}: "
+                f"AGENT_{current.id} left the region (non-home). Reassigning."
+            )
+            assign_regional_leaders([region], agents)
 
 
 # ============================================================
@@ -354,16 +432,15 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
 
     Responsibilities:
         1. Health-check every region's leader; trigger reassignment for any
-           region whose leader died or left.
-        2. Detect under-staffed regions (no subordinates, only a reluctant
-           leader, or dormant) and request an agent transfer from a region
-           that has a surplus.  The global leader acts as the cross-region
-           communicator: it messages the donating region's leader to redirect
-           one subordinate toward the needy region.
+           region whose leader died or left without a home tie.
+        2. Issue RETURN directives to any anchored leader that wandered outside
+           its home_region.  This is the primary mechanism that keeps leaders
+           spatially fixed — it fires every timestep a violation is detected.
+        3. Detect under-staffed regions (dormant, reluctant-solo, reluctant-team)
+           and request a cross-region agent transfer from a donor region.
 
-    This function does NOT call the LLM. It works purely through the
-    structured region/agent data and appends messages via agent.add_message()
-    so the LLM prompt for each agent already contains the directive.
+    This function does NOT call the LLM.  All directives are appended via
+    agent.add_message() so the LLM prompt for each agent already contains them.
     """
     t = global_data.get("time", 0)
 
@@ -371,7 +448,6 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
     for region in regions:
         rl = region.get("leader")
         if rl is not None and rl not in agents:
-            # Regional leader died between the removelist step and now
             print(
                 f"[CA-CAMON] Global leader detects Region {region['id']} leader "
                 f"AGENT_{rl.id} is gone. Triggering reassignment."
@@ -385,28 +461,50 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
                     f"AGENT_{new_rl.id} ({get_agent_type_name(new_rl)}) is new regional leader."
                 )
 
-    # ── 2. Cross-region agent redistribution ───────────────────────────────
-    # Identify needy regions: dormant OR only has a reluctant leader with no
-    # subordinates, OR has a reluctant leader at all.
+    # ── 2. Return directives for anchored leaders outside their home region ─
+    for region in regions:
+        rl = region.get("leader")
+        if rl is None:
+            continue
+        if rl.is_anchored and rl.home_region is region and not _agent_in_region(region, rl):
+            cx = (region["x_min"] + region["x_max"]) // 2
+            cy = (region["y_min"] + region["y_max"]) // 2
+            return_msg = (
+                f"[GLOBAL LEADER DIRECTIVE — ANCHOR VIOLATION] "
+                f"AGENT_{rl.id}, you have left your home Region {region['id']} "
+                f"(bounds x:[{region['x_min']}–{region['x_max']}], "
+                f"y:[{region['y_min']}–{region['y_max']}]). "
+                f"As the regional leader you MUST stay within these bounds to maintain "
+                f"visibility and coordination of your region. "
+                f"Return to your region centroid ({cx}, {cy}) IMMEDIATELY. "
+                f"Do NOT chase fires outside your region — message worker agents or "
+                f"the global leader instead."
+            )
+            rl.add_message(
+                source=f"GLOBAL_LEADER_AGENT_{global_leader.id}",
+                content=return_msg,
+                time=t,
+            )
+            print(
+                f"[CA-CAMON] Return directive issued to AGENT_{rl.id} "
+                f"(Region {region['id']} anchored leader is outside bounds)."
+            )
+
+    # ── 3. Cross-region agent redistribution ───────────────────────────────
     needy_regions = []
     for region in regions:
         agents_in = [a for a in agents if _agent_in_region(region, a)]
         rl = region.get("leader")
         if rl is None:
-            # Dormant: no agents at all
             needy_regions.append((region, "dormant", 0))
         elif region.get("reluctant_leader") and len(agents_in) == 1:
-            # Single worker with no support
             needy_regions.append((region, "reluctant_solo", 1))
         elif region.get("reluctant_leader"):
-            # Has workers but no eligible leader
             needy_regions.append((region, "reluctant_team", len(agents_in)))
 
     if not needy_regions:
-        return  # nothing to do
+        return
 
-    # Find donor regions: those with an eligible leader AND at least 2 agents
-    # (so they can spare one subordinate)
     donor_regions = []
     for region in regions:
         rl = region.get("leader")
@@ -418,29 +516,24 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
             donor_regions.append((region, subordinates))
 
     if not donor_regions:
-        return  # no surplus anywhere
+        return
 
-    # Match each needy region to the nearest donor and issue a redirect message
     for needy_region, need_type, n_agents in needy_regions:
-        # Centre of needy region
         nx = (needy_region["x_min"] + needy_region["x_max"]) / 2
         ny = (needy_region["y_min"] + needy_region["y_max"]) / 2
 
-        # Closest donor by distance between region centres
         best_donor_region, best_subs = min(
             donor_regions,
             key=lambda dr: abs((dr[0]["x_min"] + dr[0]["x_max"]) / 2 - nx)
                          + abs((dr[0]["y_min"] + dr[0]["y_max"]) / 2 - ny)
         )
         donor_rl = best_donor_region["leader"]
-        # Pick the subordinate closest to the needy region's centre
         transfer_agent = min(
             best_subs,
             key=lambda a: (abs(a.last_position[0] - nx) + abs(a.last_position[1] - ny))
             if a.last_position else float('inf')
         )
 
-        # Message the donor regional leader to redirect the transfer agent
         redirect_target = (int(nx), int(ny))
         gl_msg = (
             f"[GLOBAL LEADER DIRECTIVE] Region {needy_region['id']} needs support "
@@ -452,7 +545,6 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
             content=gl_msg,
             time=t,
         )
-        # Also message the transfer agent directly so it is aware
         agent_msg = (
             f"[GLOBAL LEADER DIRECTIVE] You are being redirected to Region "
             f"{needy_region['id']} (centre {redirect_target}) to provide support. "
@@ -469,10 +561,108 @@ def orchestrate_global(global_leader: Agent, regions: list, agents: list,
             f"to Region {needy_region['id']} ({need_type})."
         )
 
-        # Remove used subordinate from donor list to avoid double-assignment
         best_subs.remove(transfer_agent)
         if not best_subs:
             donor_regions = [(r, s) for r, s in donor_regions if r is not best_donor_region]
+
+
+# ============================================================
+# [CA-CAMON]  Graceful degradation: region merging for agents < regions
+# ============================================================
+
+def _region_risk_score(region: dict, agents: list) -> float:
+    """
+    Heuristic risk score for a region.  Higher = higher priority for leader coverage.
+    Currently uses active-fire agent count as a proxy; extend with fuel/spread data
+    from global_data when available.
+
+    Score = number of agents whose last_perception mentions 'fire' within the region
+            (a lightweight proxy until fire-state data is passed in).
+    For now we use physical agent count in region as an inverse proxy: a region with
+    more agents is probably already handling fire, so fewer agents = lower urgency
+    (workers haven't been sent there).  Dormant regions with no agents get 0.
+    """
+    return float(len([a for a in agents if _agent_in_region(region, a)]))
+
+
+def compute_merged_regions(regions: list, agents: list, num_leaders: int) -> list:
+    """
+    [CA-CAMON] Graceful-degradation strategy for agents < regions.
+
+    When fewer eligible leader-capable agents exist than regions, merge the
+    lowest-priority adjacent region pairs until num_active_regions == num_leaders.
+
+    Returns a new list of region dicts.  Merged regions are represented as a
+    single dict with expanded x_min/y_min/x_max/y_max and a 'merged_from' key
+    listing the original region IDs.
+
+    Callers should replace `regions` with the returned list and call
+    assign_regional_leaders() on it.  When num_leaders recovers, call
+    compute_regions() again to restore the original partition.
+
+    Algorithm:
+        1. Score each region by risk (higher = higher priority, keep as-is).
+        2. Sort by ascending risk → lowest-risk first.
+        3. Iteratively merge the two lowest-risk adjacent pairs until
+           len(regions) == num_leaders.
+    """
+    if num_leaders <= 0:
+        return regions  # nothing to do
+
+    working = [dict(r) for r in regions]  # shallow copy
+
+    while len(working) > num_leaders:
+        # Score all regions; sort ascending (lowest risk = first to merge)
+        scored = sorted(working, key=lambda r: _region_risk_score(r, agents))
+
+        merged = False
+        for i, r_a in enumerate(scored):
+            for r_b in scored[i + 1:]:
+                # Only merge if regions are spatially adjacent (share an edge)
+                adjacent = (
+                    (r_a["x_max"] + 1 == r_b["x_min"] and r_a["y_min"] == r_b["y_min"]) or
+                    (r_b["x_max"] + 1 == r_a["x_min"] and r_b["y_min"] == r_a["y_min"]) or
+                    (r_a["y_max"] + 1 == r_b["y_min"] and r_a["x_min"] == r_b["x_min"]) or
+                    (r_b["y_max"] + 1 == r_a["y_min"] and r_b["x_min"] == r_a["x_min"])
+                )
+                if adjacent:
+                    merged_from = (
+                        r_a.get("merged_from", [r_a["id"]]) +
+                        r_b.get("merged_from", [r_b["id"]])
+                    )
+                    new_region = {
+                        "id":               r_a["id"],   # keep lower id
+                        "x_min":            min(r_a["x_min"], r_b["x_min"]),
+                        "y_min":            min(r_a["y_min"], r_b["y_min"]),
+                        "x_max":            max(r_a["x_max"], r_b["x_max"]),
+                        "y_max":            max(r_a["y_max"], r_b["y_max"]),
+                        "leader":           None,
+                        "reluctant_leader": False,
+                        "merged_from":      merged_from,
+                    }
+                    working.remove(r_a)
+                    working.remove(r_b)
+                    working.append(new_region)
+                    print(
+                        f"[CA-CAMON] Merging regions {r_a['id']} + {r_b['id']} "
+                        f"→ super-region {new_region['id']} "
+                        f"(graceful degradation: {num_leaders} leaders, "
+                        f"{len(working)} regions after merge)."
+                    )
+                    merged = True
+                    break
+            if merged:
+                break
+
+        if not merged:
+            # No adjacent pairs left — stop (grid topology exhausted)
+            print(
+                f"[CA-CAMON] WARNING: Cannot merge further; "
+                f"{len(working)} regions remain with {num_leaders} leaders."
+            )
+            break
+
+    return working
 
 
 # ============================================================
@@ -642,6 +832,26 @@ def generate_plan(agent: Agent, global_data: dict) -> None:
     chat_string      = ''.join(f"{t}: \n{msg}\n\n" for t, msg in agent.chat_history.items())
     global_str       = [(k, v) for k, v in global_data.items() if "AGENT" in str(k)]
 
+    # [CA-CAMON] Build hard spatial constraint for anchored regional leaders.
+    # This is injected prominently into the prompt so the LLM cannot miss it.
+    region_constraint = ""
+    if agent.is_anchored and agent.home_region is not None:
+        r  = agent.home_region
+        cx = (r["x_min"] + r["x_max"]) // 2
+        cy = (r["y_min"] + r["y_max"]) // 2
+        region_constraint = f"""
+⚠️  HARD SPATIAL CONSTRAINT — YOU MUST NOT MOVE OUTSIDE YOUR REGION ⚠️
+You are the REGIONAL LEADER permanently assigned to Region {r['id']}.
+Your movement is restricted to: x:[{r['x_min']}–{r['x_max']}], y:[{r['y_min']}–{r['y_max']}] (centroid {cx},{cy}).
+DO NOT leave these bounds under ANY circumstances.
+If you detect fire or a threat OUTSIDE your region:
+  • Do NOT move toward it yourself.
+  • Send a message to the global leader or the relevant region's leader.
+  • Command worker agents in your region to respond if they can reach it.
+Your value to the team comes from staying visible and coordinated within Region {r['id']}.
+Abandoning your region removes all coverage from it — this is never acceptable.
+"""
+
     generate_plan_string = f"""
             You are AGENT_{agent.id} a {type_string} Agent, currently acting as the {role_label} in a cooperative multi-agent robotic task.
             This is your team composition, including you:
@@ -650,7 +860,7 @@ def generate_plan(agent: Agent, global_data: dict) -> None:
             Your team's current task is:
             {agent.current_task}
             ---
-
+            {region_constraint}
             Your past actions were:
             {past_string}
 

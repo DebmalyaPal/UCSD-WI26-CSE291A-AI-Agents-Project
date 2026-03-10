@@ -5,3 +5,5 @@ Helicopter Agents:
             - Refill water storage. You must be above a water source.
             - Deploy 1 water directly below.
             - Do nothing, remaining on standby and conserving energy.
+
+            IMPORTANT — When acting as a REGIONAL LEADER: your movement is restricted to your assigned region bounds. Do not move outside these bounds under any circumstances. If you detect a threat outside your region, report it via message to the global leader or the relevant regional leader instead of moving toward it yourself.

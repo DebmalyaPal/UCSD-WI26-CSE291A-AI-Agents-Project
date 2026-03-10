@@ -61,6 +61,9 @@ def wildfire_alg(cfg: Config):
         elect_global_leader,
         handle_global_leader_death,
         orchestrate_global,
+        # [CA-CAMON] graceful degradation
+        compute_merged_regions,
+        can_be_leader,
     )
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -113,6 +116,23 @@ def wildfire_alg(cfg: Config):
     # ── [CA-CAMON]  Build regional partition ───────────────────────────────
     regions = compute_regions(cfg.envs.map_size)
     print(f"[CA-CAMON] Grid partitioned into {len(regions)} region(s).")
+
+    # ── [CA-CAMON]  Graceful degradation: merge regions if leaders are scarce ─
+    # Count eligible leader-capable agents (helicopters + drones).
+    # If fewer than the number of regions, merge lowest-risk adjacent regions
+    # until we have at most one region per eligible leader.
+    # NOTE: positions are not yet known here, so we pass an empty list for
+    # agents — merging at init uses topology only (risk scores default to 0).
+    # A re-check at t=0 inside the loop will re-merge if needed after positions
+    # are observed.
+    num_leaders = sum(1 for a in agents if can_be_leader(a))
+    if num_leaders < len(regions):
+        print(
+            f"[CA-CAMON] Only {num_leaders} leader-capable agents for "
+            f"{len(regions)} regions. Applying graceful degradation (region merging)."
+        )
+        regions = compute_merged_regions(regions, agents=[], num_leaders=num_leaders)
+        print(f"[CA-CAMON] Merged partition: {len(regions)} region(s) for {num_leaders} leader(s).")
 
     # ── [CA-CAMON]  Initial global leader election ──────────────────────────
     # global_leader  – single Agent that orchestrates all regional leaders.
@@ -234,17 +254,44 @@ def wildfire_alg(cfg: Config):
 
         # ── [CA-CAMON]  Regional leader assignment ──────────────────────────
         #
-        # assign_regional_leaders rebuilds all region["leader"] values from
-        # scratch.  Because dead agents are already gone from `agents`, this
-        # naturally handles regional leader death: the next-best candidate is
-        # selected automatically.
-        #
-        # check_and_reassign_regional_leader then handles:
-        #   • Leader walked out of region (boundary exit).
-        #   • Reluctant-leader upgrade when an eligible agent has arrived.
+        # assign_regional_leaders rebuilds all region["leader"] values.
+        # check_and_reassign_regional_leader handles:
+        #   • Anchored leader temporarily outside bounds → keep + return directive.
+        #   • Visitor (non-home) leader walked out → reassign.
+        #   • Reluctant-leader upgrade when eligible agent arrives.
+        #   • Dormant region restored when home owner returns.
         assign_regional_leaders(regions, agents)
         for region in regions:
             check_and_reassign_regional_leader(region, agents)
+            # Restore anchored home-leader over any physical visitor who was elected
+            rl = region.get("leader")
+            for a in agents:
+                if (a.home_region is region and a.is_anchored
+                        and _agent_in_region(region, a)
+                        and a is not rl):
+                    region["leader"]           = a
+                    region["reluctant_leader"] = False
+                    print(
+                        f"[CA-CAMON] Region {region['id']}: "
+                        f"home leader AGENT_{a.id} restored over visitor AGENT_{rl.id if rl else 'None'}."
+                    )
+                    break
+
+        # ── [CA-CAMON]  Lock home regions on first populated timestep ───────
+        # On the very first timestep where agents have known positions, lock
+        # each region's elected leader as its permanent home owner (if not
+        # already locked from a previous timestep).
+        for region in regions:
+            rl = region.get("leader")
+            if rl is not None and rl.home_region is None and can_be_leader(rl):
+                rl.home_region = region
+                rl.is_anchored = True
+                print(
+                    f"[CA-CAMON] Home region locked: AGENT_{rl.id} "
+                    f"({rl.type_name}) → Region {region['id']} "
+                    f"x:[{region['x_min']}–{region['x_max']}] "
+                    f"y:[{region['y_min']}–{region['y_max']}]"
+                )
 
         # Sync assigned_region and is_global_leader flags onto agents
         for agent in agents:
