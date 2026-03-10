@@ -262,7 +262,7 @@ def wildfire_alg(cfg: Config):
 
         print(f"\nExecuting actions: {env_action}")
 
-        action_tensor = torch.from_numpy(np.array(env_action)).to(device)
+        action_tensor = torch.tensor(env_action, dtype=torch.float32, device=device) # torch.from_numpy(np.array(env_action)).to(device)
         state["agents"]["action"] = action_tensor
         newstate = env.step(state)
         state["agents"]["observation"] = newstate["next"]["agents"]["observation"]
