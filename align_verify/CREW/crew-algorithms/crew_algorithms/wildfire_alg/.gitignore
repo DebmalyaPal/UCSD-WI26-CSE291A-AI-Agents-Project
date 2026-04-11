@@ -1,0 +1,60 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Past logs directory
+past_logs/
+
+# Render directory
+render/
+
+# Output directories
+results/data/*
+results/logs/*
+results/plots/*
+
+# PDF files
+crewwildfirepdf/
+*.pdf
+
+# Data directory
+
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db 
+
+# Wildfire Multi ALg
+algorithms/WILDFIRE_MULTI_ALG/*
+
+
+agent_logs/*
+
+past_logs/*
+render/*
+
+
+
+
+test.py
+

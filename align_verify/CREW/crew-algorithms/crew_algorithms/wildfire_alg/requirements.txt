@@ -1,0 +1,5 @@
+pydantic
+openai==1.82.0
+certifi
+opencv-python
+seaborn
